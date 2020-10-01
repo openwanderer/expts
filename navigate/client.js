@@ -10,7 +10,8 @@ class Client {
         this.viewer = new OpenWanderer.Viewer(options.element || '#pano');
         this.panoNetworkMgr = new NearbyPanoMgr({
             jsonApi: options.api.geojson,
-            nearbyApi: options.api.nearby
+            nearbyApi: options.api.nearby,
+            elevation: true
         });
         this.lat = 0.0;
         this.lon = 0.0;
@@ -21,7 +22,6 @@ class Client {
         this.api.byId = options.api.byId;  
         this.api.panoImg = options.api.panoImg; 
         this.api.panoImgResized = options.api.panoImgResized; 
-        this.nearbys = { };
         this.panoMetadata = { };
         this.viewer.markersPlugin.on("select-marker", async (e, marker, data) => {
             let id;
@@ -51,7 +51,7 @@ class Client {
     }
 
     async loadPanorama(id) {
-        if(this.panoMetadata[this.curPanoId] && this.panoMetadata[this.curPanoId].nearbys) {
+        if(this.panoMetadata[this.curPanoId] && this.panoMetadata[this.curPanoId].adjacents) {
 //            this._hideMarkers(this.curPanoId);
         }
 
@@ -75,7 +75,7 @@ class Client {
 
     async _loadMarkers(id) {    
         this.viewer.markersPlugin.clearMarkers();
-        if(!this.panoMetadata[id].nearbys) {
+        if(!this.panoMetadata[id].adjacents) {
             const routes = await this.panoNetworkMgr.doLoadNearbys(
                 this.panoMetadata[id]
             );
@@ -95,7 +95,7 @@ class Client {
             }
 
             this._removeMarkers(id);
-            this.panoMetadata[id].nearbys = null;
+            this.panoMetadata[id].adjacents = null;
 
             if(this.curPanoId == id) {    
                 await this.loadPanorama(id);
@@ -114,11 +114,14 @@ class Client {
     }
 
     _onFoundNearbys(origPanoId, routes) {
-        this.panoMetadata[origPanoId].nearbys = routes.adjacents;
+        this.panoMetadata[origPanoId].adjacents = routes.adjacents;
         this.panoMetadata[origPanoId].allNearbys = routes.nearbys.map ( nearby =>  [ nearby.lon, nearby.lat, nearby.altitude, nearby.id ] );
 
         this.panoMetadata[origPanoId].altitude = routes.altitude;
         this._createMarkers(origPanoId);
+        console.log('GEOJSON:');
+        console.log(routes.geojson);
+        this._createWayPaths(routes.geojson);
     }
 
     _createMarkers(id) { 
@@ -126,7 +129,7 @@ class Client {
         this.viewer.setLonLat(this.panoMetadata[id].lon, this.panoMetadata[id].lat);
         this.viewer.setElevation(this.panoMetadata[id].altitude + 1.5);
         this._createPanoMarkers(id);
-        this._createPaths(id);
+//        this._createPaths(id);
     }
 
     _setPanoId(id) {
@@ -143,7 +146,7 @@ class Client {
 
     _createHotspots(id) {
 
-        this.panoMetadata[id].nearbys.forEach ( nearby => {
+        this.panoMetadata[id].adjacents.forEach ( nearby => {
             nearby.key = `${id}-${nearby.id}`;
             let yaw = nearby.bearing;
             this.viewer.markersPlugin.addMarker({
@@ -159,19 +162,19 @@ class Client {
     }
 
     _showMarkers(id) {
-        this.panoMetadata[id].nearbys.forEach(nearby => {
+        this.panoMetadata[id].adjacents.forEach(nearby => {
             this.viewer.markersPlugin.showMarker(nearby.key);
         });
     }
 
     _hideMarkers(id) {
-        this.panoMetadata[id].nearbys.forEach(nearby => {
+        this.panoMetadata[id].adjacents.forEach(nearby => {
             this.viewer.markersPlugin.hideMarker(nearby.key);
         });
     }
 
     _removeMarkers(id) {
-        this.panoMetadata[id].nearbys.forEach(nearby => {
+        this.panoMetadata[id].adjacents.forEach(nearby => {
             this.viewer.markersPlugin.removeMarker(nearby.key);
         });
     }
@@ -183,10 +186,16 @@ class Client {
     }
 
     _createPaths(id) {
-        this.panoMetadata[id].nearbys.forEach ( nearby => {
+        this.panoMetadata[id].adjacents.forEach ( nearby => {
             nearby.key = `path-${id}-${nearby.id}`;
             this.viewer.addPath(nearby.path, { tooltip: `to pano ${nearby.id}`, id: nearby.key });
         });
+    }
+
+    _createWayPaths(geojson) {
+        for(let feature of geojson.features) {
+            this.viewer.addPath(feature.geometry.coordinates, { tooltip: `OSM way #${feature.properties.osm_id}` } );
+        }
     }
 }
 
