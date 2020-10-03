@@ -1,7 +1,7 @@
 import psycopg2
 import sys
 from anonymizer.detection import Detector, get_weights_path
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 import numpy
 import os
 
@@ -19,14 +19,15 @@ def main(argv):
         detect(ids, threshold)
                 
 
-def find_unauthorised(startid=9686):
+def find_unauthorised(startid=9686, endid=10000):
     conn = psycopg2.connect('dbname=gis user=gis')
     cur = conn.cursor()
-    cur.execute(f"SELECT id FROM panoramas WHERE authorised=0 AND id >= {startid} ORDER BY id")
+    cur.execute(f"SELECT id FROM panoramas WHERE authorised=0 AND id BETWEEN {startid} AND {endid} ORDER BY id")
     results = cur.fetchall()
     return results
 
-def detect(ids, threshold=0.3, weights_path="./weights",panos_path="./panos", output_path="./panosout"):
+def detect(ids, threshold=0.3, weights_path="./weights",panos_path="/home/www-data/panos", output_path="./panosout"):
+    print(threshold)
     detectors = {
         'face': Detector(kind='face', weights_path=get_weights_path(weights_path, kind='face')),
         'plate': Detector(kind='face', weights_path=get_weights_path(weights_path, kind='plate'))
@@ -52,7 +53,13 @@ def detect(ids, threshold=0.3, weights_path="./weights",panos_path="./panos", ou
 
             for box in detected_boxes:
                 print(f"{box.x_min} {box.y_min} {box.x_max} {box.y_max} {box.score} {box.kind}")
-                draw.rectangle([box.x_min, box.y_min, box.x_max, box.y_max],outline=(255, 0, 0), width=5)
+    #            draw.rectangle([box.x_min, box.y_min, box.x_max, box.y_max],outline=(255, 0, 0), width=5)
+
+                cropbox = (int(box.x_min), int(box.y_min), int(box.x_max), int(box.y_max))
+                crop = image.crop(cropbox)
+                for i in range(10):
+                    crop = crop.filter(ImageFilter.BLUR)
+                image.paste(crop, cropbox)
 
 
             image.save(f"{output_path}/{threshold}/{id}.jpg", "JPEG")
