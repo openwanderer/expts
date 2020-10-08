@@ -25,7 +25,6 @@ class NetworkMgr {
             edgeDataReduceFn: (e)=> { } 
         } );
         this.jMgr = new JunctionManager(this.pathFinder);
-        return geojson; // return updated geojson
     }
 
     // is a given point a junction?
